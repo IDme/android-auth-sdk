@@ -2,7 +2,10 @@ package com.idme.auth.jwt
 
 import com.idme.auth.errors.IDmeAuthError
 import com.idme.auth.utilities.Base64URL
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 /** Decoded JWT components. */
 data class DecodedJWT(
@@ -51,28 +54,28 @@ object JWTDecoder {
         val headerData = Base64URL.decode(headerPart)
             ?: throw IDmeAuthError.InvalidJWT("Failed to decode JWT header")
         val headerJSON = try {
-            JSONObject(String(headerData, Charsets.UTF_8))
+            Json.parseToJsonElement(String(headerData, Charsets.UTF_8)) as JsonObject
         } catch (e: Exception) {
             throw IDmeAuthError.InvalidJWT("Failed to decode JWT header")
         }
 
-        val alg = headerJSON.optString("alg", "").ifEmpty {
-            throw IDmeAuthError.InvalidJWT("Missing 'alg' in JWT header")
-        }
-        val kid = headerJSON.optString("kid", null)
+        val alg = (headerJSON["alg"] as? JsonPrimitive)?.content
+            ?.ifEmpty { null }
+            ?: throw IDmeAuthError.InvalidJWT("Missing 'alg' in JWT header")
+        val kid = (headerJSON["kid"] as? JsonPrimitive)?.content
 
         // Decode payload
         val payloadData = Base64URL.decode(payloadPart)
             ?: throw IDmeAuthError.InvalidJWT("Failed to decode JWT payload")
         val payloadJSON = try {
-            JSONObject(String(payloadData, Charsets.UTF_8))
+            Json.parseToJsonElement(String(payloadData, Charsets.UTF_8)) as JsonObject
         } catch (e: Exception) {
             throw IDmeAuthError.InvalidJWT("Failed to decode JWT payload")
         }
 
         val payloadMap = mutableMapOf<String, Any>()
-        for (key in payloadJSON.keys()) {
-            payloadMap[key] = payloadJSON.get(key)
+        for ((key, value) in payloadJSON) {
+            payloadMap[key] = (value as? JsonPrimitive)?.content ?: value.toString()
         }
 
         // Decode signature
